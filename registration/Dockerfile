@@ -49,12 +49,13 @@ ARG container_user_uid=1001
 ARG container_user_gid=1001
 
 # install packages and create user
-RUN sed -i 's|http://deb.debian.org/debian|http://archive.debian.org/debian|g' /etc/apt/sources.list && \
-    sed -i 's|http://security.debian.org/debian-security|http://archive.debian.org/debian-security|g' /etc/apt/sources.list && \
-    apt-get -o Acquire::Check-Valid-Until=false update && \
-    apt-get install -y unzip zip nginx && \
-    groupadd -g ${container_user_gid} ${container_user_group} && \
-    useradd -u ${container_user_uid} -g ${container_user_group} -s /bin/sh -m ${container_user}
+RUN sed -i 's|http://deb.debian.org|http://archive.debian.org|g' /etc/apt/sources.list && \
+ sed -i 's|http://security.debian.org|http://archive.debian.org|g' /etc/apt/sources.list && \
+ echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until && \
+ apt-get -y update \
+ && apt-get install -y unzip zip nginx \
+ && groupadd -g ${container_user_gid} ${container_user_group} \
+ && useradd -u ${container_user_uid} -g ${container_user_group} -s /bin/sh -m ${container_user}
 
 # set working directory for the user
 WORKDIR /home/${container_user}
