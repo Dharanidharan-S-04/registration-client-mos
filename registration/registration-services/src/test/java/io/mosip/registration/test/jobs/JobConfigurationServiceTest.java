@@ -410,6 +410,7 @@ public class JobConfigurationServiceTest {
 		otherAttributes.put(RegistrationConstants.ROLES_MODIFIED, "Y");
 		successResponseDTO.setOtherAttributes(otherAttributes );
 		responseDTO.setSuccessResponseDTO(successResponseDTO);
+		intiate();
 		initiateJobTest();
 
 		SyncJobDef syncJobDef = new SyncJobDef();
@@ -480,3 +481,4 @@ public class JobConfigurationServiceTest {
 	}
 	
 }
+
