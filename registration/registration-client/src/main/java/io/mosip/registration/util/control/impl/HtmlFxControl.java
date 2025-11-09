@@ -82,6 +82,9 @@ public class HtmlFxControl extends FxControl {
         final Accordion accordion = new Accordion();
         ResourceBundle resourceBundle = ResourceBundle.getBundle(RegistrationConstants.LABELS, Locale.getDefault());
         getRegistrationDTo().getSelectedLanguagesByApplicant().forEach(langCode -> {
+            if("bur".equals(langCode)&&"consentText".equals(uiFieldDTO.getId())){
+                return;
+            }
             final TitledPane titledPane = new TitledPane(resourceBundle.getString(langCode), buildWebView(langCode));
             accordion.getPanes().add(titledPane);
             changeNodeOrientation(titledPane, langCode);
