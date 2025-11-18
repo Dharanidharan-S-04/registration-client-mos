@@ -2646,6 +2646,7 @@ Working on new Css by taleev
 .tab .tab-label {
     -fx-text-fill: #3b3b3b;
     -fx-font-size: 13px;
+	-fx-font-family: "Noto Sans Myanmar";
 }
 
 .tab-pane > .tab-header-area > .headers-region > .tab > .tab-container > .tab-label {

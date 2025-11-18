@@ -6,9 +6,6 @@
 <?import javafx.scene.layout.*?>
 
 <GridPane prefHeight="420.0" prefWidth="620.0" styleClass="scanPage" xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1" fx:controller="io.mosip.registration.controller.reg.LanguageSelectionController">
-   <stylesheets>
-        <String fx:value="/style.css" />
-    </stylesheets>
    <columnConstraints>
       <ColumnConstraints hgrow="SOMETIMES" minWidth="10.0" percentWidth="100.0" />
    </columnConstraints>
