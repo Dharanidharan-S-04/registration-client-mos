@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+import javafx.scene.control.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 
@@ -41,6 +42,8 @@ import io.mosip.registration.dto.schema.ProcessSpecDto;
 import io.mosip.registration.dto.schema.UiFieldDTO;
 import io.mosip.registration.dto.schema.UiScreenDTO;
 import io.mosip.registration.entity.LocationHierarchy;
+import io.mosip.registration.dto.mastersync.GenericDto;
+import io.mosip.commons.packet.dto.packet.SimpleDto;
 import io.mosip.registration.exception.RegBaseCheckedException;
 import io.mosip.registration.exception.RegistrationExceptionConstants;
 import io.mosip.registration.service.sync.PreRegistrationDataSyncService;
@@ -65,14 +68,6 @@ import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.ProgressIndicator;
-import javafx.scene.control.ScrollPane;
-import javafx.scene.control.Tab;
-import javafx.scene.control.TabPane;
-import javafx.scene.control.TextField;
-import javafx.scene.control.Tooltip;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.FlowPane;
@@ -81,6 +76,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.RowConstraints;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
+import javafx.scene.Parent; // Add this import
 import lombok.SneakyThrows;
 
 /**
@@ -131,7 +127,7 @@ public class GenericController extends BaseController {
 
 	@FXML
 	private Label notification;
-	
+
 	private ProgressIndicator progressIndicator;
 
 	@Autowired
@@ -148,7 +144,7 @@ public class GenericController extends BaseController {
 
 	@Autowired
 	private PreRegistrationDataSyncService preRegistrationDataSyncService;
-	
+
 	private static TreeMap<Integer, UiScreenDTO> orderedScreens = new TreeMap<>();
 	private static Map<String, FxControl> fxControlMap = new HashMap<String, FxControl>();
 	private Stage keyboardStage;
@@ -162,11 +158,11 @@ public class GenericController extends BaseController {
 	public static Map<String, FxControl> getFxControlMap() {
 		return fxControlMap;
 	}
-	
+
 	public void disableAuthenticateButton(boolean disable) {
 		authenticate.setDisable(disable);
 	}
-	
+
 	private void initialize(RegistrationDTO registrationDTO) {
 		orderedScreens.clear();
 		fxControlMap.clear();
@@ -263,7 +259,7 @@ public class GenericController extends BaseController {
 								generateAlertLanguageSpecific(RegistrationConstants.ERROR, RegistrationConstants.PRE_REG_CONSUMED_PACKET_ERROR);
 								return;
 							}
-							
+
 							try {
 								loadPreRegSync(responseDTO);
 								if (responseDTO.getSuccessResponseDTO() != null) {
@@ -354,13 +350,13 @@ public class GenericController extends BaseController {
 	private void loadPreRegSync(ResponseDTO responseDTO) throws RegBaseCheckedException{
 		auditFactory.audit(AuditEvent.REG_DEMO_PRE_REG_DATA_FETCH, Components.REG_DEMO_DETAILS, SessionContext.userId(),
 				AuditReferenceIdTypes.USER_ID.getReferenceTypeId());
-		
+
 		SuccessResponseDTO successResponseDTO = responseDTO.getSuccessResponseDTO();
 		List<ErrorResponseDTO> errorResponseDTOList = responseDTO.getErrorResponseDTOs();
 
-		if (errorResponseDTOList != null && !errorResponseDTOList.isEmpty() || 
-				successResponseDTO==null || 
-				successResponseDTO.getOtherAttributes() == null || 
+		if (errorResponseDTOList != null && !errorResponseDTOList.isEmpty() ||
+				successResponseDTO==null ||
+				successResponseDTO.getOtherAttributes() == null ||
 				!successResponseDTO.getOtherAttributes().containsKey(RegistrationConstants.REGISTRATION_DTO)) {
 			throw new RegBaseCheckedException(RegistrationExceptionConstants.PRE_REG_SYNC_FAIL.getErrorCode(),
 					RegistrationExceptionConstants.PRE_REG_SYNC_FAIL.getErrorMessage());
@@ -386,6 +382,10 @@ public class GenericController extends BaseController {
 				}
 			}
 		}
+		// Handle NRC concatenation after loading data
+		handleNrcConcatenation("nrc");
+		handleNrcConcatenation("father");
+		handleNrcConcatenation("mother");
 	}
 
 
@@ -546,7 +546,7 @@ public class GenericController extends BaseController {
 			@Override
 			public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
 				LOGGER.debug("Old selection : {} New Selection : {}", oldValue, newValue);
-				
+
 				if (isKeyboardVisible() && keyboardStage != null) {
 					keyboardStage.close();
 				}
@@ -610,15 +610,15 @@ public class GenericController extends BaseController {
 	private int getNextSelection(TabPane tabPane, int oldSelection, int newSelection) {
 		if (newSelection-oldSelection <= 1) {
 			return newSelection;
-		} 
+		}
 		for (int i = oldSelection + 1; i < newSelection; i++) {
 			if (!tabPane.getTabs().get(i).isDisabled()) {
 				return oldSelection;
 			}
-		}		
+		}
 		return newSelection;
 	}
-	
+
 	private boolean isScreenValid(final String screenName) {
 		Optional<UiScreenDTO> result = orderedScreens.values()
 				.stream().filter(screen -> screen.getName().equals(screenName.replace("_tab", EMPTY))).findFirst();
@@ -720,10 +720,10 @@ public class GenericController extends BaseController {
 			});
 
 			String tabNameInApplicationLanguage = screenDTO.getLabel().get(getRegistrationDTOFromSession().getSelectedLanguagesByApplicant().get(0));
-			
+
 			if(screenFieldGroups == null || screenFieldGroups.isEmpty())
 				continue;
-			
+
 			Tab screenTab = new Tab();
 			screenTab.setId(screenDTO.getName()+"_tab");
 			screenTab.setText(tabNameInApplicationLanguage == null ?
@@ -776,9 +776,21 @@ public class GenericController extends BaseController {
 
 		//refresh to reflect the initial visibility configuration
 		refreshFields();
+
+		// DIAGNOSTIC: Log all registered controls
+		LOGGER.info("========================================");
+		LOGGER.info("REGISTERED FX CONTROLS:");
+		for (String key : fxControlMap.keySet()) {
+			LOGGER.info("  - {}", key);
+		}
+		LOGGER.info("Total controls: {}", fxControlMap.size());
+		LOGGER.info("========================================");
+
+		// Now add listeners
+		addNrcFieldListeners();
+
 		addPreviewAndAuthScreen(tabPane);
 	}
-
 
 	private void addPreviewAndAuthScreen(TabPane tabPane) throws Exception {
 		List<String> previewLabels = new ArrayList<>();
@@ -789,7 +801,7 @@ public class GenericController extends BaseController {
 			authLabels.add(ApplicationContext.getBundle(langCode, RegistrationConstants.LABELS)
 					.getString(RegistrationConstants.authentication));
 		}
-		
+
 		String langCode = getRegistrationDTOFromSession().getSelectedLanguagesByApplicant().get(0);
 
 		Tab previewScreen = new Tab();
@@ -907,19 +919,40 @@ public class GenericController extends BaseController {
 				case CONTROLTYPE_DROPDOWN:
 					fxControl = new DropDownFxControl().build(uiFieldDTO);
 					break;
+				case "nrcConcat": // NRC result field
+					LOGGER.info("Creating nrcConcat field: {}", uiFieldDTO.getId());
+					fxControl = new TextFieldFxControl().build(uiFieldDTO);
+					if (fxControl != null && fxControl.getNode() != null) {
+						LOGGER.info("Making {} read-only", uiFieldDTO.getId());
+						makeTextFieldReadOnly(fxControl.getNode());
+					}
+					break;
 				case CONTROLTYPE_HTML:
 					fxControl = new HtmlFxControl().build(uiFieldDTO);
 					break;
 			}
 		}
 
-		if(fxControl == null)
-			throw  new Exception("Failed to build fxControl");
-
+		if(fxControl == null) {
+			throw new Exception("Failed to build fxControl for field: " + uiFieldDTO.getId()
+					+ " with controlType: " + uiFieldDTO.getControlType());
+		}
 		fxControlMap.put(uiFieldDTO.getId(), fxControl);
+		LOGGER.info("Successfully built and added fxControl for: {}", uiFieldDTO.getId());
 		return fxControl;
 	}
-
+	private void makeTextFieldReadOnly(Node node) {
+		if (node instanceof TextField) {
+			TextField tf = (TextField) node;
+			tf.setEditable(false);
+			tf.setStyle("-fx-background-color: #f0f0f0;");
+			LOGGER.debug("Made TextField read-only: {}", tf.getId());
+		} else if (node instanceof Parent) {
+			for (Node child : ((Parent) node).getChildrenUnmodifiable()) {
+				makeTextFieldReadOnly(child);
+			}
+		}
+	}
 	public void refreshFields() {
 		orderedScreens.values().forEach(screen -> { refreshScreenVisibility(screen.getName()); });
 	}
@@ -932,11 +965,558 @@ public class GenericController extends BaseController {
 	private FxControl getFxControl(String fieldId) {
 		return GenericController.getFxControlMap().get(fieldId);
 	}
-	
-	public Stage getKeyboardStage() {		
+	private <T extends Node> T findNode(Node root, Class<T> type) {
+		if (root == null) return null;
+		if (type.isInstance(root)) return type.cast(root);
+		if (root instanceof Parent) {
+			for (Node child : ((Parent) root).getChildrenUnmodifiable()) {
+				T found = findNode(child, type);
+				if (found != null) return found;
+			}
+		}
+		return null;
+	}
+
+	private void addNrcFieldListeners() {
+		LOGGER.debug("========================================");
+		LOGGER.debug("SETTING UP NRC LISTENERS");
+		LOGGER.debug("========================================");
+
+		String[] prefixes = {"nrc", "father", "mother"};
+
+		for (String prefix : prefixes) {
+			LOGGER.debug("Setting up listeners for prefix: {}", prefix);
+
+			// Dropdown fields
+			String nrcCodeField = prefix.equals("nrc") ? "nrcCode" : prefix + "NrcCode";
+			String cityCodeField = prefix.equals("nrc") ? "cityCode" : prefix + "CityCode";
+			String residenceStatusField = prefix.equals("nrc") ? "residenceStatus" : prefix + "ResidenceStatus";
+
+			addDropdownListener(prefix, nrcCodeField);
+			addDropdownListener(prefix, cityCodeField);
+			addDropdownListener(prefix, residenceStatusField);
+
+			// Number part field (INPUT only, NOT result)
+			String numberPartFieldId = prefix.equals("nrc") ? "nrcNumberPart" : prefix + "NrcNumberPart";
+			FxControl numberPartControl = getFxControl(numberPartFieldId);
+
+			if (numberPartControl != null) {
+				LOGGER.debug("Found control for: {}", numberPartFieldId);
+				findAllTextFieldsAndAttachListener(numberPartControl.getNode(), prefix, numberPartFieldId);
+			} else {
+				LOGGER.warn("Control not found for: {}", numberPartFieldId);
+			}
+		}
+
+		LOGGER.debug("Triggering initial NRC calculations...");
+		Platform.runLater(() -> {
+			handleNrcConcatenation("nrc");
+			handleNrcConcatenation("father");
+			handleNrcConcatenation("mother");
+		});
+	}
+
+	private void findAllTextFieldsAndAttachListener(Node node, String prefix, String expectedFieldId) {
+		if (node instanceof TextField) {
+			TextField tf = (TextField) node;
+			String tfId = tf.getId();
+
+			// CRITICAL: Only attach if this is actually the INPUT field, not the result
+			if (tfId != null && tfId.startsWith(expectedFieldId)) {
+				LOGGER.debug("Attaching listener to TextField: {}", tfId);
+				tf.textProperty().addListener((obs, oldVal, newVal) -> {
+					LOGGER.debug("TextField {} changed: '{}' -> '{}'", tfId, oldVal, newVal);
+					Platform.runLater(() -> handleNrcConcatenation(prefix));
+				});
+			}
+		} else if (node instanceof Parent) {
+			for (Node child : ((Parent) node).getChildrenUnmodifiable()) {
+				findAllTextFieldsAndAttachListener(child, prefix, expectedFieldId);
+			}
+		}
+	}
+
+	private void addDropdownListener(String prefix, String fieldId) {
+		FxControl control = getFxControl(fieldId);
+		if (control == null) {
+			LOGGER.warn("Control not found for dropdown: {}", fieldId);
+			return;
+		}
+
+		ComboBox<?> comboBox = findNode(control.getNode(), ComboBox.class);
+		if (comboBox != null) {
+			LOGGER.debug("Attaching listener to ComboBox: {}", fieldId);
+			comboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+				LOGGER.debug("ComboBox {} changed: {} -> {}", fieldId, oldVal, newVal);
+				Platform.runLater(() -> handleNrcConcatenation(prefix));
+			});
+		} else {
+			LOGGER.error("Could not find ComboBox for field: {}", fieldId);
+		}
+	}
+
+
+	/**
+	 * Handles NRC concatenation for applicant, father, and mother
+	 */
+	public void handleNrcConcatenation(String fieldPrefix) {
+		try {
+			LOGGER.error("====== NRC CONCATENATION START: {} ======", fieldPrefix);
+
+			// Define field IDs
+			String nrcCodeField = fieldPrefix.equals("nrc") ? "nrcCode" : fieldPrefix + "NrcCode";
+			String cityCodeField = fieldPrefix.equals("nrc") ? "cityCode" : fieldPrefix + "CityCode";
+			String residenceStatusField = fieldPrefix.equals("nrc") ? "residenceStatus" : fieldPrefix + "ResidenceStatus";
+			String nrcNumberPartField = fieldPrefix.equals("nrc") ? "nrcNumberPart" : fieldPrefix + "NrcNumberPart";
+			String nrcNumberResultField = fieldPrefix.equals("nrc") ? "nrcNumber" : fieldPrefix + "NrcNumber";
+
+			List<String> languages = getRegistrationDTOFromSession().getSelectedLanguagesByApplicant();
+			LOGGER.error("Selected Languages: {}", languages);
+
+			// Get codes (language-independent)
+			String nrcCodeVal = getSelectedCodeValue(nrcCodeField);
+			String cityCodeVal = getSelectedCodeValue(cityCodeField);
+			String resStatusVal = getSelectedCodeValue(residenceStatusField);
+
+			LOGGER.error("RAW CODES - NRC: '{}', City: '{}', Status: '{}'", nrcCodeVal, cityCodeVal, resStatusVal);
+
+			// Clear if missing required values
+			if (nrcCodeVal == null || cityCodeVal == null) {
+				LOGGER.error("Missing codes - CLEARING");
+				for (String langCode : languages) {
+					setFieldValue(nrcNumberResultField, langCode, "");
+				}
+				return;
+			}
+
+			// Process EACH language independently
+			for (String langCode : languages) {
+				LOGGER.error(">>>>>> PROCESSING LANGUAGE: {} <<<<<<", langCode);
+
+				// Get language-specific labels from dropdowns with detailed logging
+				LOGGER.error("  Getting NRC label for code '{}' in lang '{}'...", nrcCodeVal, langCode);
+				String nrcLabel = getDropdownLabelForCode(nrcCodeField, nrcCodeVal, langCode);
+				LOGGER.error("  -> NRC Label: '{}'", nrcLabel);
+
+				LOGGER.error("  Getting City label for code '{}' in lang '{}'...", cityCodeVal, langCode);
+				String cityLabel = getDropdownLabelForCode(cityCodeField, cityCodeVal, langCode);
+				LOGGER.error("  -> City Label: '{}'", cityLabel);
+
+				LOGGER.error("  Getting Status for code '{}' in lang '{}'...", resStatusVal, langCode);
+				String resStatusDisplay = getResidenceStatusForLanguage(resStatusVal, langCode);
+				LOGGER.error("  -> Status: '{}'", resStatusDisplay);
+
+				// Get digits
+				LOGGER.error("  Getting digits for lang '{}'...", langCode);
+				String digits = getFieldValue(nrcNumberPartField, langCode);
+				LOGGER.error("  -> Digits from '{}': '{}'", langCode, digits);
+
+				if (digits == null || digits.trim().isEmpty()) {
+					for (String otherLang : languages) {
+						if (!otherLang.equals(langCode)) {
+							digits = getFieldValue(nrcNumberPartField, otherLang);
+							if (digits != null && !digits.trim().isEmpty()) {
+								LOGGER.error("  -> Got digits from OTHER lang '{}': '{}'", otherLang, digits);
+								break;
+							}
+						}
+					}
+				}
+
+				// Transliterate digits
+				if (digits != null && !digits.trim().isEmpty()) {
+					LOGGER.error("  Transliterating digits: '{}'", digits);
+					String beforeNormalize = digits;
+					digits = toEnglishDigits(digits);
+					LOGGER.error("  -> After normalize to English: '{}'", digits);
+
+					if (langCode.equals("bur")) {
+						digits = toBurmeseDigits(digits);
+						LOGGER.error("  -> After convert to Burmese: '{}'", digits);
+					}
+				}
+
+				// Build result
+				StringBuilder result = new StringBuilder();
+
+				if (nrcLabel != null && !nrcLabel.isEmpty()) {
+					result.append(nrcLabel);
+				}
+
+				if (cityLabel != null && !cityLabel.isEmpty()) {
+					// Check if the current result (nrcLabel) already ends with a slash
+					// Only add a slash separator if it is missing
+					if (result.length() > 0 && result.charAt(result.length() - 1) != '/') {
+						result.append("/");
+					}
+					result.append(cityLabel);
+				}
+
+				if (resStatusDisplay != null && !resStatusDisplay.isEmpty()) {
+					result.append(resStatusDisplay);
+				}
+
+				if (digits != null && !digits.isEmpty()) {
+					result.append(digits);
+				}
+				String finalResult = result.toString();
+				LOGGER.error("  =====> FINAL RESULT for '{}': '{}' <=====", langCode, finalResult);
+
+				// Check what script the result contains
+				boolean hasEnglish = finalResult.matches(".*[A-Za-z0-9]+.*");
+				boolean hasBurmese = containsBurmese(finalResult);
+				LOGGER.error("  Result analysis - hasEnglish: {}, hasBurmese: {}", hasEnglish, hasBurmese);
+
+				// Set the result
+				setFieldValue(nrcNumberResultField, langCode, finalResult);
+			}
+
+			LOGGER.error("====== NRC CONCATENATION END ======");
+		} catch (Exception e) {
+			LOGGER.error("ERROR in NRC concatenation: ", e);
+		}
+	}
+
+
+	private String getDropdownLabelForCode(String fieldId, String code, String langCode) {
+		LOGGER.error("    getDropdownLabel - field: {}, code: {}, lang: {}", fieldId, code, langCode);
+
+		if (code == null || code.isEmpty()) {
+			LOGGER.error("    -> Code is empty, returning empty string");
+			return "";
+		}
+
+		FxControl fxControl = getFxControl(fieldId);
+		if (!(fxControl instanceof DropDownFxControl)) {
+			LOGGER.error("    -> Not a dropdown, returning code: {}", code);
+			return code;
+		}
+
+		DropDownFxControl dropdown = (DropDownFxControl) fxControl;
+		List<GenericDto> options = dropdown.getPossibleValues(langCode);
+
+		LOGGER.error("    -> Got {} options for lang '{}'", options != null ? options.size() : 0, langCode);
+
+		if (options != null && !options.isEmpty()) {
+			// Log first few options to see what we're working with
+			int logCount = Math.min(3, options.size());
+			for (int i = 0; i < logCount; i++) {
+				GenericDto opt = options.get(i);
+				LOGGER.error("       Option {}: code='{}', name='{}'", i, opt.getCode(), opt.getName());
+			}
+
+			for (GenericDto option : options) {
+				if (option.getCode().equals(code)) {
+					String label = option.getName();
+					boolean labelIsBurmese = containsBurmese(label);
+					LOGGER.error("    -> FOUND MATCH! Label: '{}' (isBurmese: {})", label, labelIsBurmese);
+					return label;
+				}
+			}
+		}
+
+		LOGGER.error("    -> NO MATCH FOUND, returning code: {}", code);
+		return code;
+	}
+
+
+	private String getResidenceStatusForLanguage(String code, String langCode) {
+		if (code == null || code.trim().isEmpty()) return "";
+
+		// English mappings
+		Map<String, String> toEnglish = new HashMap<>();
+		toEnglish.put("(နိုင်)", "(C)");
+		toEnglish.put("(ပြု)", "(N)");
+		toEnglish.put("(ဧည့်)", "(A)");
+		toEnglish.put("နိုင်", "(C)");
+		toEnglish.put("ပြု", "(N)");
+		toEnglish.put("ဧည့်", "(A)");
+		toEnglish.put("C", "(C)");
+		toEnglish.put("N", "(N)");
+		toEnglish.put("A", "(A)");
+
+		// Burmese mappings
+		Map<String, String> toBurmese = new HashMap<>();
+		toBurmese.put("(C)", "(နိုင်)");
+		toBurmese.put("(N)", "(ပြု)");
+		toBurmese.put("(A)", "(ဧည့်)");
+		toBurmese.put("C", "(နိုင်)");
+		toBurmese.put("N", "(ပြု)");
+		toBurmese.put("A", "(ဧည့်)");
+
+		boolean isBurmese = langCode.equals("bur");
+
+		if (isBurmese) {
+			return toBurmese.getOrDefault(code, code);
+		} else {
+			return toEnglish.getOrDefault(code, code);
+		}
+	}
+
+	private String getSelectedCodeValue(String fieldId) {
+		FxControl fxControl = getFxControl(fieldId);
+		if (fxControl != null) {
+			ComboBox<?> comboBox = findNode(fxControl.getNode(), ComboBox.class);
+			if (comboBox != null && comboBox.getValue() != null) {
+				if (comboBox.getValue() instanceof GenericDto) {
+					String code = ((GenericDto) comboBox.getValue()).getCode();
+					LOGGER.debug("Got code from ComboBox {}: '{}'", fieldId, code);
+					return code;
+				}
+			}
+		}
+
+		// Fallback to DTO
+		if (getRegistrationDTOFromSession().SELECTED_CODES != null) {
+			String code = getRegistrationDTOFromSession().SELECTED_CODES.get(fieldId + "Code");
+			if (code == null) {
+				code = getRegistrationDTOFromSession().SELECTED_CODES.get(fieldId);
+			}
+			if (code != null) {
+				LOGGER.debug("Got code from DTO {}: '{}'", fieldId, code);
+			}
+			return code;
+		}
+		return null;
+	}
+	private String getFieldValue(String fieldId, String langCode) {
+		FxControl fxControl = getFxControl(fieldId);
+		if (fxControl == null) return null;
+
+		// Try finding TextField with language suffix
+		TextField tf = findTextFieldById(fxControl.getNode(), fieldId + "_" + langCode);
+
+		if (tf == null) {
+			tf = findTextFieldById(fxControl.getNode(), fieldId);
+		}
+
+		if (tf == null && fxControl.getNode() instanceof TextField) {
+			tf = (TextField) fxControl.getNode();
+		}
+
+		if (tf != null) {
+			String value = tf.getText();
+			LOGGER.debug("Got value from UI {}: '{}'", fieldId, value);
+			return value;
+		}
+
+		// Fallback to DTO
+		Object data = fxControl.getData();
+		if (data instanceof List) {
+			for (Object item : (List<?>) data) {
+				if (item instanceof SimpleDto && ((SimpleDto) item).getLanguage().equals(langCode)) {
+					return ((SimpleDto) item).getValue();
+				}
+			}
+		} else if (data instanceof String) {
+			return (String) data;
+		}
+
+		return null;
+	}
+
+	private TextField findTextFieldById(Node root, String targetId) {
+		if (root == null || targetId == null) return null;
+
+		if (root instanceof TextField) {
+			String id = root.getId();
+			if (id != null && id.equals(targetId)) {
+				LOGGER.debug("Found TextField with matching ID: {}", targetId);
+				return (TextField) root;
+			}
+		}
+
+		if (root instanceof Parent) {
+			for (Node child : ((Parent) root).getChildrenUnmodifiable()) {
+				TextField found = findTextFieldById(child, targetId);
+				if (found != null) return found;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Get selected code from dropdown
+	 */
+
+
+	private boolean containsBurmese(String input) {
+		return input != null && input.chars().anyMatch(c -> c >= 0x1000 && c <= 0x109F);
+	}
+
+
+	private String toBurmeseDigits(String input) {
+		if (input == null || input.isEmpty()) return "";
+		char[] eng = {'0','1','2','3','4','5','6','7','8','9'};
+		char[] bur = {'၀','၁','၂','၃','၄','၅','၆','၇','၈','၉'};
+		return replaceChars(input, eng, bur);
+	}
+
+	private String toEnglishDigits(String input) {
+		if (input == null || input.isEmpty()) return "";
+		char[] eng = {'0','1','2','3','4','5','6','7','8','9'};
+		char[] bur = {'၀','၁','၂','၃','၄','၅','၆','၇','၈','၉'};
+		return replaceChars(input, bur, eng);
+	}
+
+	private String replaceChars(String input, char[] source, char[] target) {
+		char[] chars = input.toCharArray();
+		for (int i = 0; i < chars.length; i++) {
+			for (int j = 0; j < source.length; j++) {
+				if (chars[i] == source[j]) {
+					chars[i] = target[j];
+					break;
+				}
+			}
+		}
+		return new String(chars);
+	}
+
+	private void setFieldValue(String fieldId, String langCode, String value) {
+		LOGGER.debug("Setting field {} ({}) to '{}'", fieldId, langCode, value);
+
+		FxControl fxControl = getFxControl(fieldId);
+		if (fxControl == null) {
+			LOGGER.error("FxControl not found: {}", fieldId);
+			return;
+		}
+
+		Node rootNode = fxControl.getNode();
+		TextField tf = null;
+
+		// 1. Identify if this is the Primary Language
+		String primaryLang = getRegistrationDTOFromSession().getSelectedLanguagesByApplicant().get(0);
+		boolean isPrimaryLanguage = langCode.equalsIgnoreCase(primaryLang);
+
+		// 2. Try Exact Language ID (e.g., nrcNumber_bur)
+		tf = findTextFieldById(rootNode, fieldId + "_" + langCode);
+
+		// 3. Try Alias Language ID (e.g., nrcNumber_my)
+		if (tf == null) {
+			String alias = getLanguageAlias(langCode);
+			if (alias != null) {
+				tf = findTextFieldById(rootNode, fieldId + "_" + alias);
+			}
+		}
+
+		// 4. Fallback Strategies (ONLY allowed for Primary Language)
+		if (tf == null && isPrimaryLanguage) {
+			LOGGER.debug("Strict match failed for Primary Lang '{}'. Attempting fallbacks...", langCode);
+
+			// 4a. Try Base ID on the Root Node itself
+			if (rootNode instanceof TextField && fieldId.equals(rootNode.getId())) {
+				tf = (TextField) rootNode;
+			}
+
+			// 4b. Try Base ID search in children
+			if (tf == null) {
+				tf = findTextFieldById(rootNode, fieldId);
+			}
+
+			// 4c. RESTORED: Strategy 5 - Find First Available TextField
+			// This is what was making English work originally.
+			// We only allow this for Primary Language to prevent Burmese from grabbing this field.
+			if (tf == null && rootNode instanceof Parent) {
+				tf = findFirstTextField((Parent) rootNode);
+				if (tf != null) {
+					LOGGER.debug("Found field via findFirstTextField strategy (Primary Language)");
+				}
+			}
+		}
+
+		if (tf != null) {
+			boolean wasEditable = tf.isEditable();
+			tf.setEditable(true);
+			tf.setText(value);
+			tf.setEditable(wasEditable);
+			LOGGER.debug("SUCCESS: Set value for {} in lang {}", fieldId, langCode);
+		} else {
+			// DIAGNOSTIC LOGGING: If we still can't find the field (especially Burmese),
+			// print what IDs actually exist so we can fix the mapping.
+			LOGGER.error("FAILED to find TextField for {} in lang {}. Primary: {}", fieldId, langCode, isPrimaryLanguage);
+			LOGGER.error("Available IDs in this control:");
+			logAvailableIds(rootNode);
+		}
+
+		// Update DTO
+		updateDataObject(fxControl, langCode, value);
+	}
+
+	// Add this helper method to your class to see IDs in the logs
+	private void logAvailableIds(Node node) {
+		if (node == null) return;
+		if (node.getId() != null && !node.getId().isEmpty()) {
+			LOGGER.error(" - Found Node ID: '{}' (Type: {})", node.getId(), node.getClass().getSimpleName());
+		}
+		if (node instanceof Parent) {
+			for (Node child : ((Parent) node).getChildrenUnmodifiable()) {
+				logAvailableIds(child);
+			}
+		}
+	}
+
+	private String getLanguageAlias(String langCode) {
+		if (langCode == null) return null;
+		if ("my".equalsIgnoreCase(langCode)) return "bur";
+		if ("bur".equalsIgnoreCase(langCode)) return "my";
+		if ("eng".equalsIgnoreCase(langCode)) return "en";
+		if ("en".equalsIgnoreCase(langCode)) return "eng";
+		return null;
+	}
+
+	private void updateDataObject(FxControl fxControl, String langCode, String value) {
+		Object currentData = fxControl.getData();
+		if (currentData instanceof List) {
+			List<SimpleDto> list = (List<SimpleDto>) currentData;
+			boolean found = false;
+			for (SimpleDto dto : list) {
+				if (dto.getLanguage().equals(langCode)) {
+					dto.setValue(value);
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				list.add(new SimpleDto(langCode, value));
+			}
+			fxControl.setData(list);
+		} else {
+			fxControl.setData(value);
+		}
+		LOGGER.debug("Updated DTO for field, lang: {}", langCode);
+	}
+
+	private TextField findFirstTextField(Parent parent) {
+		if (parent == null) return null;
+
+		LOGGER.debug("Searching for TextField in {} with {} children",
+				parent.getClass().getSimpleName(),
+				parent.getChildrenUnmodifiable().size());
+
+		for (Node child : parent.getChildrenUnmodifiable()) {
+			LOGGER.debug("  Checking child: {} (id: {})",
+					child.getClass().getSimpleName(),
+					child.getId());
+
+			if (child instanceof TextField) {
+				LOGGER.debug("  -> Found TextField!");
+				return (TextField) child;
+			}
+
+			if (child instanceof Parent) {
+				TextField found = findFirstTextField((Parent) child);
+				if (found != null) return found;
+			}
+		}
+
+		return null;
+	}
+
+
+	public Stage getKeyboardStage() {
 		return keyboardStage;
 	}
-	
+
 	public void setKeyboardStage(Stage keyboardStage) {
 		this.keyboardStage = keyboardStage;
 	}
