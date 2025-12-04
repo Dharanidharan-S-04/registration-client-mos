@@ -2708,3 +2708,16 @@ Working on new Css by taleev
 	-fx-font-size: 18.0px;
 	-fx-text-fill: #005baa;
 }
+.uniform-field-vbox {
+  -fx-pref-width: 280px;
+  -fx-max-width: 280px;
+  -fx-min-width: 280px;
+}
+.uniform-control {
+  -fx-pref-width: 280px;
+  -fx-max-width: 280px;
+  -fx-min-width: 280px;
+}
+.uniform-message-label {
+  -fx-max-width: 280px;
+}

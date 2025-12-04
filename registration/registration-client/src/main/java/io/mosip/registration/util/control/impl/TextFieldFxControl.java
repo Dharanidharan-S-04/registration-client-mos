@@ -162,6 +162,7 @@ public class TextFieldFxControl extends FxControl {
 		this.node = simpleTypeVBox;
 		simpleTypeVBox.setId(fieldName + RegistrationConstants.VBOX);
 		simpleTypeVBox.setSpacing(5);
+		simpleTypeVBox.setPrefWidth(280);
 
 		/** Title label */
 		Label fieldTitle = getLabel(uiFieldDTO.getId() + RegistrationConstants.LABEL, "",
@@ -294,7 +295,9 @@ public class TextFieldFxControl extends FxControl {
 	private HBox createTextBox(String langCode, boolean isSimpleType) {
 		HBox textFieldHBox = new HBox();
 		TextField textField = getTextField(langCode, uiFieldDTO.getId() + langCode, false);
-		textField.setMinWidth(400);
+		textField.setPrefWidth(280);
+		textField.setMaxWidth(280);
+		textField.setMinWidth(280);		
 		textFieldHBox.getChildren().add(textField);
 
 		if(isSimpleType) {
