@@ -1467,7 +1467,9 @@ Working on new Css by taleev
 .table-view .column-header .label {
 	-fx-alignment: CENTER;
 	-fx-text-fill: #666666;
-	-fx-font: 15.0px Noto Sans Myanmar;
+	-fx-font: 15.0px;
+	-fx-font-family: "Noto Sans Myanmar";
+    -fx-font-weight: normal;
 }
 
 .table-view>.virtual-flow>.scroll-bar {
@@ -2171,7 +2173,6 @@ Working on new Css by taleev
 	-fx-font-size: 11.0px;
 	-fx-text-fill: #666666;
 	-fx-font-family: Noto Sans Myanmar;
-	-fx-font-weight: bold;
 }
 
 .newsUpdateTime {
@@ -2190,11 +2191,10 @@ Working on new Css by taleev
 	-fx-stroke: #C9C9C9;
 }
 
-#newsViewAll {
+.newsViewAll {
 	-fx-font-size: 10.0px;
 	-fx-text-fill: #666666;
 	-fx-font-family: Noto Sans Myanmar;
-	-fx-font-weight: bold;
 }
 /* Home Page Design Ends */
 
@@ -2656,7 +2656,7 @@ Working on new Css by taleev
 
 .tab:selected .tab-label {
     -fx-text-fill: #0B6A82;
-    -fx-font-weight: bold;
+	-fx-font-family: "Noto Sans Myanmar";
 }
 
 .tab-pane:top *.tab-header-area {
