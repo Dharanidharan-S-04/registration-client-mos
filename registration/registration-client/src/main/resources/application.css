@@ -438,12 +438,14 @@
 
 .languageCheckBox {
 	-fx-font-size: 14px;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .languageCheckBox .box {
 	-fx-background-color: #ffffff;
 	-fx-border-color: #005baa;
 	-fx-border-radius: 5px;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .languageCheckBox:selected .mark {
@@ -489,10 +491,12 @@
 	-fx-pref-height: 39.0px;
 	-fx-pref-width: 221.0px;
 	-fx-prompt-text-fill: derive(-fx-control-inner-background,-30%);
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .loginTextStyle:focused {
     -fx-prompt-text-fill: derive(-fx-control-inner-background,-30%);
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .hyperLinkStyle {
@@ -512,6 +516,7 @@
 	-fx-font-size: 10.0px;
 	-fx-effect: dropshadow(three-pass-box, rgba(0.0, 0.0, 0.0, 0.6), 5.0,
 		0.0, 0.0, 1.0);
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .loginSubmitStyle1 {
@@ -524,30 +529,35 @@
 	-fx-font-size: 10.0px;
 	-fx-effect: dropshadow(three-pass-box, rgba(0.0, 0.0, 0.0, 0.6), 5.0,
 		0.0, 0.0, 1.0);
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .loginSubmitStyle:hover {
 	-fx-background-color: #004887;
 	-fx-border-color: #004887;
 	-fx-text-fill: #FFFFFF;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .loginSubmitStyle:pressed {
 	-fx-background-color: #004887;
 	-fx-border-color: #004887;
 	-fx-text-fill: #FFFFFF;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .loginSubmitStyle1:hover {
 	-fx-background-color: #004887;
 	-fx-border-color: #004887;
 	-fx-text-fill: #FFFFFF;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .loginSubmitStyle1:pressed {
 	-fx-background-color: #004887;
 	-fx-border-color: #004887;
 	-fx-text-fill: #FFFFFF;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .loginOtpValidStyle {
@@ -876,6 +886,7 @@ Working on new Css by taleev
 	-fx-border-radius: 3.0, 3.0, 3.0, 3.0;
 	-fx-font-size: 1.2em;
 	-fx-border-radius: 3.0, 3.0, 3.0, 3.0;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .backButton:hover {
@@ -2520,11 +2531,13 @@ Working on new Css by taleev
 }
 
 .schedulerMsg {
-	-fx-font-size: 12.0px;
+	-fx-font-size: 10.0px;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .schedulerTimer {
 	-fx-text-fill: red;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .schedulerContinueBtn {
@@ -2548,12 +2561,13 @@ Working on new Css by taleev
 	-fx-border-width: 0.0 0.0 1.0 0.0;
 	-fx-border-color: black;
 	-fx-background-color: #175768;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .schedulerTitleMsg {
 	-fx-font-size: 14.0px;
 	-fx-text-fill: White;
-	-fx-font-weight: bold;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .authenticationErrorMsg {
