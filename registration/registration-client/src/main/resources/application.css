@@ -504,6 +504,7 @@
 	-fx-underline: false;
 	-fx-border-color: transparent;
 	-fx-font-size: 10.0px;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .loginSubmitStyle {
@@ -731,6 +732,7 @@ Working on new Css by taleev
 
 .higlightedLoginLable {
 	-fx-font-size: 30.0px;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .loginSubmitStyle {
@@ -1061,6 +1063,7 @@ Working on new Css by taleev
 	-fx-pref-width: 312.0px;
 	-fx-border-width: 0.0 0.0 2.0 0.0;
 	-fx-border-color: #005baa;
+	-fx-font-family: Noto Sans Myanmar;
 }
 
 .settingsLabel {
@@ -1479,7 +1482,7 @@ Working on new Css by taleev
 	-fx-alignment: CENTER;
 	-fx-text-fill: #666666;
 	-fx-font: 15.0px;
-	-fx-font-family: "Noto Sans Myanmar";
+	-fx-font-family: Noto Sans Myanmar;
     -fx-font-weight: normal;
 }
 
@@ -2734,4 +2737,5 @@ Working on new Css by taleev
 }
 .uniform-message-label {
   -fx-max-width: 280px;
+
 }
