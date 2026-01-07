@@ -4,18 +4,12 @@ import static io.mosip.registration.constants.RegistrationConstants.EMPTY;
 import static io.mosip.registration.constants.RegistrationConstants.HASH;
 import static io.mosip.registration.constants.RegistrationConstants.REG_AUTH_PAGE;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Optional;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import javafx.scene.control.*;
+import javafx.scene.layout.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 
@@ -68,12 +62,6 @@ import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
-import javafx.scene.layout.AnchorPane;
-import javafx.scene.layout.ColumnConstraints;
-import javafx.scene.layout.FlowPane;
-import javafx.scene.layout.GridPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.RowConstraints;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
 import javafx.scene.Parent; // Add this import
@@ -127,6 +115,13 @@ public class GenericController extends BaseController {
 
 	@FXML
 	private Label notification;
+	private ComboBox<String> nrcCodeComboBox;
+	private ComboBox<String> cityCodeComboBox;
+	private ComboBox<String> citizenTypeComboBox;
+	private TextField nrcNumberTextField;
+	private TextField nrcNumber;
+	private TextField constructedPridTextField;
+	private Button nrcFetchBtn;
 
 	private ProgressIndicator progressIndicator;
 
@@ -144,6 +139,9 @@ public class GenericController extends BaseController {
 
 	@Autowired
 	private PreRegistrationDataSyncService preRegistrationDataSyncService;
+
+	@Autowired
+	private io.mosip.registration.service.sync.MasterSyncService masterSyncService;
 
 	private static TreeMap<Integer, UiScreenDTO> orderedScreens = new TreeMap<>();
 	private static Map<String, FxControl> fxControlMap = new HashMap<String, FxControl>();
@@ -173,6 +171,7 @@ public class GenericController extends BaseController {
 		anchorPane.prefHeightProperty().bind(genericScreen.heightProperty());
 		fields = getAllFields(registrationDTO.getProcessId(), registrationDTO.getIdSchemaVersion());
 		additionalInfoReqIdScreenOrder = null;
+		initializeNrcComponents();
 	}
 
 
@@ -187,25 +186,49 @@ public class GenericController extends BaseController {
 		}
 	}
 
-	private HBox getPreRegistrationFetchComponent() {
+	private VBox getPreRegistrationFetchComponent() {
 		String langCode = getRegistrationDTOFromSession().getSelectedLanguagesByApplicant().get(0);
 
-		HBox hBox = new HBox();
-		hBox.setAlignment(Pos.CENTER_LEFT);
-		hBox.setSpacing(20);
-		hBox.setPrefHeight(100);
-		hBox.setPrefWidth(200);
+//		HBox hBox = new HBox();
+//		hBox.setAlignment(Pos.CENTER_LEFT);
+//		hBox.setSpacing(20);
+//		hBox.setPrefHeight(100);
+//		hBox.setPrefWidth(200);
+		VBox mainContainer = new VBox();
+		mainContainer.setSpacing(15);
+		mainContainer.setPrefWidth(800);
+
+		// Pre-Registration ID Search Section
+		VBox preRegSection = new VBox();
+		preRegSection.setSpacing(10);
+		preRegSection.setStyle("-fx-background-color: #ffffff; -fx-padding: 10; -fx-border-color: #dee2e6; -fx-border-width: 1; -fx-border-radius: 5;");
+
+		Label preRegTitleLabel = new Label();
+		preRegTitleLabel.getStyleClass().add(LABEL_CLASS);
+		preRegTitleLabel.setText("Pre-Registration ID Search");
+		preRegTitleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+
+		HBox preRegHBox = new HBox();
+		preRegHBox.setAlignment(Pos.CENTER_LEFT);
+		preRegHBox.setSpacing(20);
+		preRegHBox.setPrefHeight(40);
+
 
 		Label label = new Label();
 		label.getStyleClass().add(LABEL_CLASS);
 		label.setId("preRegistrationLabel");
 		label.setText(ApplicationContext.getBundle(langCode, RegistrationConstants.LABELS)
 				.getString("search_for_Pre_registration_id"));
-		hBox.getChildren().add(label);
+//		hBox.getChildren().add(label);
+		preRegHBox.getChildren().add(label);
+
 		TextField textField = new TextField();
 		textField.setId("preRegistrationId");
 		textField.getStyleClass().add(TEXTFIELD_CLASS);
-		hBox.getChildren().add(textField);
+//		hBox.getChildren().add(textField);
+		textField.setPrefWidth(200);
+		preRegHBox.getChildren().add(textField);
+
 		Button button = new Button();
 		button.setId("fetchBtn");
 		button.getStyleClass().add("demoGraphicPaneContentButton");
@@ -216,12 +239,108 @@ public class GenericController extends BaseController {
 			executePreRegFetchTask(textField);
 		});
 
-		hBox.getChildren().add(button);
+//		hBox.getChildren().add(button);
+		preRegHBox.getChildren().add(button);
+		preRegSection.getChildren().addAll(preRegTitleLabel, preRegHBox);
+
+		// NRC Search Section
+		VBox nrcSection = new VBox();
+		nrcSection.setSpacing(10);
+		nrcSection.setStyle("-fx-background-color: #f8f9fa; -fx-padding: 10; -fx-border-color: #dee2e6; -fx-border-width: 1; -fx-border-radius: 5;");
+
+		Label nrcTitleLabel = new Label();
+		nrcTitleLabel.getStyleClass().add(LABEL_CLASS);
+		nrcTitleLabel.setText("NRC Number Search");
+		nrcTitleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+
+		Label nrcLabel = new Label();
+		nrcLabel.getStyleClass().add(LABEL_CLASS);
+		nrcLabel.setId("nrcSearchLabel");
+		nrcLabel.setText(ApplicationContext.getBundle(langCode, RegistrationConstants.LABELS)
+				.getString("search_by_nrc_number"));
+
+		HBox nrcInputHBox = new HBox();
+		nrcInputHBox.setSpacing(10);
+		nrcInputHBox.setAlignment(Pos.CENTER_LEFT);
+
+		// NRC Components
+		nrcCodeComboBox = new ComboBox<>();
+		nrcCodeComboBox.setId("nrcCodeComboBox");
+		nrcCodeComboBox.getStyleClass().add(TEXTFIELD_CLASS);
+		nrcCodeComboBox.setPrefWidth(80);
+		nrcCodeComboBox.setPromptText(ApplicationContext.getBundle(langCode, RegistrationConstants.LABELS)
+				.getString("nrc_code"));
+		nrcCodeComboBox.getItems().addAll("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14");
+
+		cityCodeComboBox = new ComboBox<>();
+		cityCodeComboBox.setId("cityCodeComboBox");
+		cityCodeComboBox.getStyleClass().add(TEXTFIELD_CLASS);
+		cityCodeComboBox.setPrefWidth(120);
+		cityCodeComboBox.setPromptText(ApplicationContext.getBundle(langCode, RegistrationConstants.LABELS)
+				.getString("city_code"));
+		cityCodeComboBox.getItems().addAll("Mandalay", "Yangon", "Naypyidaw", "Mawlamyine", "Bago", "Pathein", "Monywa", "Sittwe", "Magway", "Sagaing", "Taunggyi", "Myingyan", "Tamana", "Pyay");
+
+		citizenTypeComboBox = new ComboBox<>();
+		citizenTypeComboBox.setId("citizenTypeComboBox");
+		citizenTypeComboBox.getStyleClass().add(TEXTFIELD_CLASS);
+		citizenTypeComboBox.setPrefWidth(80);
+		citizenTypeComboBox.setPromptText(ApplicationContext.getBundle(langCode, RegistrationConstants.LABELS)
+				.getString("citizen_type"));
+		citizenTypeComboBox.getItems().addAll("N", "P", "T");
+
+		nrcNumberTextField = new TextField();
+		nrcNumberTextField.setId("nrcNumberTextField");
+		nrcNumberTextField.getStyleClass().add(TEXTFIELD_CLASS);
+		nrcNumberTextField.setPrefWidth(100);
+		nrcNumberTextField.setPromptText(ApplicationContext.getBundle(langCode, RegistrationConstants.LABELS)
+				.getString("nrc_number"));
+
+		nrcNumber = new TextField();
+		nrcNumber.setId("nrcNumber");
+		nrcNumber.getStyleClass().add(TEXTFIELD_CLASS);
+		nrcNumber.setPrefWidth(200);
+		nrcNumber.setEditable(false);
+		nrcNumber.setPromptText("Full NRC Number");
+
+		constructedPridTextField = new TextField();
+		constructedPridTextField.setId("constructedPridTextField");
+		constructedPridTextField.getStyleClass().add(TEXTFIELD_CLASS);
+		constructedPridTextField.setPrefWidth(200);
+		constructedPridTextField.setEditable(false);
+		constructedPridTextField.setPromptText(ApplicationContext.getBundle(langCode, RegistrationConstants.LABELS)
+				.getString("constructed_prid"));
+
+		nrcInputHBox.getChildren().addAll(nrcCodeComboBox, cityCodeComboBox, citizenTypeComboBox, nrcNumberTextField, constructedPridTextField);
+
+		HBox nrcButtonHBox = new HBox();
+		nrcButtonHBox.setSpacing(10);
+		nrcButtonHBox.setAlignment(Pos.CENTER_LEFT);
+
+		nrcFetchBtn = new Button();
+		nrcFetchBtn.setId("nrcFetchBtn");
+		nrcFetchBtn.getStyleClass().add("demoGraphicPaneContentButton");
+		nrcFetchBtn.setText(ApplicationContext.getBundle(langCode, RegistrationConstants.LABELS)
+				.getString("fetch"));
+		nrcFetchBtn.setOnAction(event -> fetchNrcData());
+
+		nrcButtonHBox.getChildren().add(nrcFetchBtn);
+
+		nrcSection.getChildren().addAll(nrcTitleLabel, nrcLabel, nrcInputHBox, nrcButtonHBox);
+
+		// Add both sections to main container
+		mainContainer.getChildren().addAll(preRegSection, nrcSection);
+
+		// Initialize NRC components
+		initializeNrcComponents();
+
 		progressIndicator = new ProgressIndicator();
 		progressIndicator.setId("progressIndicator");
 		progressIndicator.setVisible(false);
-		hBox.getChildren().add(progressIndicator);
-		return hBox;
+//		hBox.getChildren().add(progressIndicator);
+//		return hBox;
+		mainContainer.getChildren().add(progressIndicator);
+
+		return mainContainer;
 	}
 
 	private void executePreRegFetchTask(TextField textField) {
@@ -234,28 +353,28 @@ public class GenericController extends BaseController {
 				return new Task<Void>() {
 					/*
 					 * (non-Javadoc)
-					 * 
+					 *
 					 * @see javafx.concurrent.Task#call()
 					 */
 					@Override
 					protected Void call() {
 						Platform.runLater(() -> {
-							// boolean isValid = false;
-							// try {
-							// 	isValid = pridValidatorImpl.validateId(textField.getText());
-							// } catch (InvalidIDException invalidIDException) { isValid = false; }
-
-							// if(!isValid) {
-							// 	generateAlertLanguageSpecific(RegistrationConstants.ERROR, RegistrationUIConstants.PRE_REG_ID_NOT_VALID);
-							// 	return;
-							// }
+//							boolean isValid = false;
+//							try {
+//								isValid = pridValidatorImpl.validateId(textField.getText());
+//							} catch (InvalidIDException invalidIDException) { isValid = false; }
+//
+//							if(!isValid) {
+//								generateAlertLanguageSpecific(RegistrationConstants.ERROR, RegistrationUIConstants.PRE_REG_ID_NOT_VALID);
+//								return;
+//							}
 							ResponseDTO responseDTO = preRegistrationDataSyncService.getPreRegistration(textField.getText(), false);
-							
+
 							if (responseDTO.getErrorResponseDTOs() != null
 									&& !responseDTO.getErrorResponseDTOs().isEmpty()
 									&& responseDTO.getErrorResponseDTOs().get(0).getMessage() != null
 									&& responseDTO.getErrorResponseDTOs().get(0).getMessage()
-											.equalsIgnoreCase(RegistrationConstants.CONSUMED_PRID_ERROR_CODE)) {
+									.equalsIgnoreCase(RegistrationConstants.CONSUMED_PRID_ERROR_CODE)) {
 								generateAlertLanguageSpecific(RegistrationConstants.ERROR, RegistrationConstants.PRE_REG_CONSUMED_PACKET_ERROR);
 								return;
 							}
@@ -410,15 +529,15 @@ public class GenericController extends BaseController {
 		}
 
 		screenFields.forEach( field -> {
-				String alignmentGroup = field.getAlignmentGroup() == null ? field.getId()+"TemplateGroup"
-						: field.getAlignmentGroup();
+			String alignmentGroup = field.getAlignmentGroup() == null ? field.getId()+"TemplateGroup"
+					: field.getAlignmentGroup();
 
-				if(field.isInputRequired()) {
-					if(!groupedScreenFields.containsKey(alignmentGroup))
-						groupedScreenFields.put(alignmentGroup, new LinkedList<UiFieldDTO>());
+			if(field.isInputRequired()) {
+				if(!groupedScreenFields.containsKey(alignmentGroup))
+					groupedScreenFields.put(alignmentGroup, new LinkedList<UiFieldDTO>());
 
-					groupedScreenFields.get(alignmentGroup).add(field);
-				}
+				groupedScreenFields.get(alignmentGroup).add(field);
+			}
 		});
 		return groupedScreenFields;
 	}
@@ -788,6 +907,7 @@ public class GenericController extends BaseController {
 
 		// Now add listeners
 		addNrcFieldListeners();
+		Platform.runLater(() -> populateSearchDropdownsFromDemographicFields());
 
 		addPreviewAndAuthScreen(tabPane);
 	}
@@ -1536,10 +1656,664 @@ public class GenericController extends BaseController {
 	public void setPreviousId(String previousId) {
 		this.previousId = previousId;
 	}
-	
+
 	public String getCurrentScreenName() {
 		TabPane tabPane = (TabPane) anchorPane.lookup(HASH + getRegistrationDTOFromSession().getRegistrationId());
 		return tabPane.getSelectionModel().getSelectedItem().getId().replace("_tab", EMPTY);
+	}
+
+	/**
+	 * Set up hierarchical filtering between NRC Code and City Code dropdowns
+	 */
+	private void setupNrcHierarchyFiltering() {
+		if (nrcCodeComboBox != null && cityCodeComboBox != null) {
+			// Store all possible cities for filtering
+			final List<String> allCities = new ArrayList<>(cityCodeComboBox.getItems());
+
+			nrcCodeComboBox.valueProperty().addListener((obs, oldValue, newValue) -> {
+				if (newValue == null || newValue.trim().isEmpty()) {
+					// If no NRC code selected, show all cities
+					cityCodeComboBox.getItems().clear();
+					cityCodeComboBox.getItems().addAll(allCities);
+					return;
+				}
+
+				// Filter cities based on selected NRC code
+				cityCodeComboBox.getItems().clear();
+				String selectedNrcCode = newValue.trim();
+
+				// Try to get filtered cities from the actual demographic cityCode dropdown
+				// by simulating the selection
+				filterCitiesByNrcCode(selectedNrcCode, allCities);
+			});
+		}
+	}
+
+	/**
+	 * Filter cities based on the selected NRC code using the same logic as demographic fields
+	 */
+	private void filterCitiesByNrcCode(String selectedNrcCode, List<String> allCities) {
+		try {
+			FxControl cityCodeControl = getFxControl("cityCode");
+			FxControl nrcCodeControl = getFxControl("nrcCode");
+
+			if (cityCodeControl instanceof DropDownFxControl && nrcCodeControl instanceof DropDownFxControl) {
+				String langCode = getRegistrationDTOFromSession().getSelectedLanguagesByApplicant().get(0);
+
+				// Find the code value for the selected NRC name
+				DropDownFxControl nrcDropdown = (DropDownFxControl) nrcCodeControl;
+				List<io.mosip.registration.dto.mastersync.GenericDto> nrcOptions = nrcDropdown.getPossibleValues(langCode);
+
+				String selectedNrcCodeValue = null;
+				for (io.mosip.registration.dto.mastersync.GenericDto option : nrcOptions) {
+					if (option.getName().equals(selectedNrcCode)) {
+						selectedNrcCodeValue = option.getCode();
+						break;
+					}
+				}
+
+				if (selectedNrcCodeValue != null) {
+					// Try to get filtered cities by simulating the demographic dropdown behavior
+					// Instead of manipulating the actual dropdown, we'll use the hierarchical logic
+					try {
+						// Get the master sync service to get cities for the selected region
+						List<io.mosip.registration.dto.mastersync.GenericDto> filteredCities =
+								masterSyncService.getFieldValues(selectedNrcCodeValue, langCode, true);
+
+						// Add filtered cities to search dropdown
+						for (io.mosip.registration.dto.mastersync.GenericDto city : filteredCities) {
+							cityCodeComboBox.getItems().add(city.getName());
+						}
+					} catch (Exception e) {
+						LOGGER.debug("Could not get hierarchical cities, using fallback", e);
+						// If hierarchical filtering fails, fall back to region-based cities
+						addDefaultCitiesForRegion(selectedNrcCode);
+					}
+
+					// If no cities found, use fallback
+					if (cityCodeComboBox.getItems().isEmpty()) {
+						addDefaultCitiesForRegion(selectedNrcCode);
+					}
+				}
+			}
+		} catch (Exception e) {
+			LOGGER.error("Error filtering cities by NRC code", e);
+			// Fallback to showing all cities
+			cityCodeComboBox.getItems().clear();
+			cityCodeComboBox.getItems().addAll(allCities);
+		}
+	}
+
+	/**
+	 * Map residence status display names to codes expected by getResidenceStatusForLanguage
+	 */
+	/**
+	 * Maps the display name selected in the Search ComboBox back to its Master Data Code.
+	 * This ensures the search logic stays in sync with the demographic dropdown data.
+	 */
+	private String mapDisplayNameToResidenceCode(String displayName) {
+		if (displayName == null || displayName.trim().isEmpty()) {
+			return "";
+		}
+
+		try {
+			// 1. Get the demographic "residenceStatus" control which acts as the source of truth
+			FxControl residenceStatusControl = getFxControl("residenceStatus");
+
+			if (residenceStatusControl instanceof DropDownFxControl) {
+				String langCode = getRegistrationDTOFromSession().getSelectedLanguagesByApplicant().get(0);
+
+				// 2. Get the list of GenericDto objects (contains both Code and Name)
+				List<io.mosip.registration.dto.mastersync.GenericDto> options =
+						((DropDownFxControl) residenceStatusControl).getPossibleValues(langCode);
+
+				if (options != null) {
+					for (io.mosip.registration.dto.mastersync.GenericDto option : options) {
+						// 3. Match the selected name with the Master Data Name
+						if (displayName.equals(option.getName())) {
+							LOGGER.debug("Mapped Search Label '{}' to Master Code '{}'", displayName, option.getCode());
+							return option.getCode(); // Returns 'C', 'N', 'A', etc.
+						}
+					}
+				}
+			}
+		} catch (Exception e) {
+			LOGGER.error("Error mapping display name to residence code from master data", e);
+		}
+
+		// Fallback: If master data lookup fails, try basic manual mapping
+		LOGGER.warn("Master data lookup failed for '{}', using fallback mapping", displayName);
+		String trimmed = displayName.trim();
+		if (trimmed.contains("နိုင်")) return "C";
+		if (trimmed.contains("ပြု")) return "N";
+		if (trimmed.contains("ဧည့်")) return "A";
+
+		return displayName; // Return as-is if no mapping found
+	}
+	/**
+	 * Add default cities for a region when filtering fails
+	 */
+	private void addDefaultCitiesForRegion(String nrcCode) {
+		// Map NRC codes to their typical cities
+		Map<String, List<String>> regionCities = new HashMap<>();
+		regionCities.put("1", Arrays.asList("Mandalay", "Meiktila", "Pyin Oo Lwin"));
+		regionCities.put("2", Arrays.asList("Yangon", "Bago", "Pathein"));
+		regionCities.put("3", Arrays.asList("Naypyidaw", "Pyinmana"));
+		regionCities.put("4", Arrays.asList("Mawlamyine", "Thaton", "Hpa-An"));
+		regionCities.put("5", Arrays.asList("Taunggyi", "Loikaw", "Taungoo"));
+		regionCities.put("6", Arrays.asList("Monywa", "Sagaing", "Shwebo"));
+		regionCities.put("7", Arrays.asList("Sittwe", "Kyaukpyu", "Thandwe"));
+		regionCities.put("8", Arrays.asList("Magway", "Pakokku", "Chauk"));
+		regionCities.put("9", Arrays.asList("Myingyan", "Pakokku", "Natogyi"));
+		regionCities.put("10", Arrays.asList("Hakha", "Falam", "Mindat"));
+		regionCities.put("11", Arrays.asList("Myitkyina", "Bhamo", "Mohnyin"));
+		regionCities.put("12", Arrays.asList("Taunggyi", "Kengtung", "Lashio"));
+		regionCities.put("13", Arrays.asList("Dawei", "Myeik", "Kawthaung"));
+		regionCities.put("14", Arrays.asList("Naypyidaw", "Ottarathiri"));
+
+		List<String> cities = regionCities.get(nrcCode);
+		if (cities != null && !cities.isEmpty()) {
+			cityCodeComboBox.getItems().addAll(cities);
+		} else {
+			// Final fallback - show some cities
+			cityCodeComboBox.getItems().addAll("Mandalay", "Yangon", "Naypyidaw", "Mawlamyine");
+		}
+	}
+	/**
+	 * Initialize NRC component listeners for auto-constructing NRC number and PRID
+	 */
+	private void initializeNrcComponents() {
+		// Add listeners to auto-construct NRC number and PRID when components change
+		if (nrcCodeComboBox != null) {
+			nrcCodeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+				handleSearchNrcConcatenation();
+				constructPridFromNrc();
+			});
+		}
+		if (cityCodeComboBox != null) {
+			cityCodeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+				handleSearchNrcConcatenation();
+				constructPridFromNrc();
+			});
+		}
+		if (citizenTypeComboBox != null) {
+			citizenTypeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+				handleSearchNrcConcatenation();
+				constructPridFromNrc();
+			});
+		}
+		if (nrcNumberTextField != null) {
+			nrcNumberTextField.textProperty().addListener((obs, oldVal, newVal) -> {
+				handleSearchNrcConcatenation();
+				constructPridFromNrc();
+			});
+		}
+	}
+
+	/**
+	 * Handle NRC concatenation for search fields using the same logic as handleNrcConcatenation
+	 */
+	private void handleSearchNrcConcatenation() {
+		try {
+			if (nrcNumber == null) return;
+
+			String selectedLang = getRegistrationDTOFromSession().getSelectedLanguagesByApplicant().get(0);
+
+			String nrcCodeDisplay = nrcCodeComboBox != null ? nrcCodeComboBox.getValue() : "";
+			String cityCodeDisplay = cityCodeComboBox != null ? cityCodeComboBox.getValue() : "";
+			String residenceStatusDisplay = citizenTypeComboBox != null ? citizenTypeComboBox.getValue() : "";
+			String nrcDigits = nrcNumberTextField != null ? nrcNumberTextField.getText() : "";
+
+			if (nrcCodeDisplay == null || nrcCodeDisplay.isEmpty() || cityCodeDisplay == null || cityCodeDisplay.isEmpty()) {
+				nrcNumber.setText("");
+				constructedPridTextField.setText("");
+				return;
+			}
+
+			StringBuilder sb = new StringBuilder();
+
+			// 1. Append NRC Code (e.g., "5")
+			sb.append(nrcCodeDisplay.trim());
+
+			// 2. Append Slash ONLY if the NRC Code doesn't already have one
+			if (!nrcCodeDisplay.endsWith("/")) {
+				sb.append("/");
+			}
+
+			// 3. Append City (e.g., "TaMaNa")
+			sb.append(cityCodeDisplay.trim());
+
+			// 4. Append Residence Status (e.g., "(A)")
+			String resCode = mapDisplayNameToResidenceCode(residenceStatusDisplay);
+			String resLabel = getResidenceStatusForLanguage(resCode, selectedLang);
+			sb.append(resLabel);
+
+			// 5. Append Digits (with script conversion)
+			String digits = toEnglishDigits(nrcDigits.trim());
+			if ("bur".equals(selectedLang)) {
+				digits = toBurmeseDigits(digits);
+			}
+			sb.append(digits);
+
+			String finalId = sb.toString();
+
+			// Log the cleaned ID for verification
+			LOGGER.info("Constructed Clean ID: [{}]", finalId);
+
+			StringBuilder displaySb = new StringBuilder();  // Full NRC with (C) for user
+			StringBuilder apiSb = new StringBuilder();      // Clean NRC without () for API
+
+			// Display version (keep parentheses for user visibility)
+			displaySb.append(nrcCodeDisplay.trim());
+			if (!nrcCodeDisplay.endsWith("/")) displaySb.append("/");
+			displaySb.append(cityCodeDisplay.trim());
+			displaySb.append(resLabel);      // e.g., "(C)" or "(နိုင်)"
+			displaySb.append(digits);
+
+			// API version (completely remove parentheses)
+			apiSb.append(nrcCodeDisplay.trim());
+			if (!nrcCodeDisplay.endsWith("/")) apiSb.append("/");
+			apiSb.append(cityCodeDisplay.trim());
+			apiSb.append(resLabel);  // e.g., "(C)" — keep literal parentheses
+			apiSb.append(digits);
+
+			String displayNrc = displaySb.toString();
+			String apiPrid = apiSb.toString();  // Now: "11/YaThaTa(C)465464" with literal (C)
+
+//			nrcNumber.setText(displayNrc);
+			constructedPridTextField.setText(apiPrid);
+
+			LOGGER.info("Constructed Display NRC: [{}]", displayNrc);
+			LOGGER.info("Constructed API PRID (no parens): [{}]", apiPrid);
+
+			// Show full NRC to user
+			nrcNumber.setText(displayNrc);
+
+			// Use clean version for the hidden PRID field and API call
+			constructedPridTextField.setText(apiPrid);
+
+		} catch (Exception e) {
+			LOGGER.error("Error in search NRC concatenation", e);
+		}
+	}
+
+	/**
+	 * Construct PRID from NRC components in format: nrcCode/cityCode(citizenType)nrcNumber
+	 */
+	private void constructPridFromNrc() {
+		if (constructedPridTextField == null || nrcNumber == null) return;
+
+		String fullNrc = nrcNumber.getText();
+
+		if (fullNrc != null && !fullNrc.trim().isEmpty()) {
+			// Use the full concatenated NRC as the PRID for searching
+			constructedPridTextField.setText(fullNrc);
+		} else {
+			constructedPridTextField.setText("");
+		}
+	}
+
+	/**
+	 * Validate NRC components
+	 */
+	private boolean validateNrcComponents() {
+		String nrcCode = nrcCodeComboBox != null ? nrcCodeComboBox.getValue() : "";
+		String cityCode = cityCodeComboBox != null ? cityCodeComboBox.getValue() : "";
+		String citizenType = citizenTypeComboBox != null ? citizenTypeComboBox.getValue() : "";
+		String nrcDigits = nrcNumberTextField != null ? nrcNumberTextField.getText() : "";
+		String fullNrc = nrcNumber != null ? nrcNumber.getText() : "";
+
+		if (nrcCode == null || nrcCode.trim().isEmpty()) {
+			generateAlertLanguageSpecific(RegistrationConstants.ERROR, "Please select NRC Code");
+			return false;
+		}
+		if (cityCode == null || cityCode.trim().isEmpty()) {
+			generateAlertLanguageSpecific(RegistrationConstants.ERROR, "Please select City Code");
+			return false;
+		}
+		if (citizenType == null || citizenType.trim().isEmpty()) {
+			generateAlertLanguageSpecific(RegistrationConstants.ERROR, "Please select Citizen Type");
+			return false;
+		}
+		if (nrcDigits == null || nrcDigits.trim().isEmpty()) {
+			generateAlertLanguageSpecific(RegistrationConstants.ERROR, "Please enter NRC digits");
+			return false;
+		}
+		if (!nrcDigits.matches("\\d{6}")) {
+			generateAlertLanguageSpecific(RegistrationConstants.ERROR, "NRC digits must be 6 digits");
+			return false;
+		}
+		if (fullNrc == null || fullNrc.trim().isEmpty()) {
+			generateAlertLanguageSpecific(RegistrationConstants.ERROR, "NRC number could not be constructed");
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Fetch pre-registration data using NRC components
+	 */
+//	@FXML
+//	private void fetchNrcData() {
+//		if (!validateNrcComponents()) {
+//			return;
+//		}
+//
+//		// Use the concatenated NRC number
+//		String fullNrc = nrcNumber != null ? nrcNumber.getText() : "";
+//		if (fullNrc == null || fullNrc.trim().isEmpty()) {
+//			generateAlertLanguageSpecific(RegistrationConstants.ERROR, "Unable to construct NRC number for search");
+//			return;
+//		}
+//
+//		// First search for the pre-registration ID using the NRC
+	////		executeNrcSearchTask(fullNrc);
+//		String pridForApi = constructedPridTextField.getText().trim();  // Now "11/YaThaTaC465464"
+//		executeNrcSearchTask(pridForApi);
+//	}
+
+	@FXML
+	private void fetchNrcData() {
+		if (!validateNrcComponents()) {
+			return;
+		}
+
+		// Force reconstruction to ensure clean version is ready
+		handleSearchNrcConcatenation();
+
+		String apiPrid = constructedPridTextField.getText().trim();
+
+		if (apiPrid.isEmpty()) {
+			generateAlertLanguageSpecific(RegistrationConstants.ERROR, "Unable to construct clean NRC for search");
+			return;
+		}
+
+		LOGGER.info("Starting NRC fetch using clean PRID (no parentheses): [{}]", apiPrid);
+
+		executeNrcSearchTask(apiPrid);
+	}
+	/**
+	 * Handle the response from NRC search
+	 */
+	private void handleNrcSearchResponse(ResponseDTO responseDTO) {
+		try {
+			genericScreen.setDisable(false);
+			if (progressIndicator != null) progressIndicator.setVisible(false);
+
+			if (responseDTO == null || responseDTO.getErrorResponseDTOs() != null && !responseDTO.getErrorResponseDTOs().isEmpty()) {
+				String errorMessage = "Failed to find pre-registration for the given NRC";
+				if (responseDTO != null && responseDTO.getErrorResponseDTOs() != null && !responseDTO.getErrorResponseDTOs().isEmpty()) {
+					errorMessage = responseDTO.getErrorResponseDTOs().get(0).getMessage();
+				}
+				generateAlertLanguageSpecific(RegistrationConstants.ERROR, errorMessage);
+				return;
+			}
+
+			// If successful, the response should contain the pre-registration data
+			handleFetchResponse(responseDTO, "NRC_SEARCH_RESULT");
+
+		} catch (Exception exception) {
+			LOGGER.error("Error handling NRC search response", exception);
+			generateAlertLanguageSpecific(RegistrationConstants.ERROR, RegistrationConstants.PRE_REG_TO_GET_PACKET_ERROR);
+		}
+	}
+
+	private void handleFetchResponse(ResponseDTO responseDTO, String prid) {
+		if (responseDTO.getErrorResponseDTOs() != null && !responseDTO.getErrorResponseDTOs().isEmpty()) {
+			String msg = responseDTO.getErrorResponseDTOs().get(0).getMessage();
+			if (RegistrationConstants.CONSUMED_PRID_ERROR_CODE.equalsIgnoreCase(msg)) {
+				generateAlertLanguageSpecific(RegistrationConstants.ERROR, RegistrationConstants.PRE_REG_CONSUMED_PACKET_ERROR);
+			} else {
+				generateAlertLanguageSpecific(RegistrationConstants.ERROR, RegistrationConstants.PRE_REG_TO_GET_PACKET_ERROR);
+			}
+			return;
+		}
+
+		try {
+			loadPreRegSync(responseDTO);
+			if (responseDTO.getSuccessResponseDTO() != null) {
+				getRegistrationDTOFromSession().setPreRegistrationId(prid);
+				getRegistrationDTOFromSession().setAppId(prid);
+				getRegistrationDTOFromSession().setRegistrationId(prid);
+
+				TabPane tabPane = (TabPane) anchorPane.lookup(HASH + getRegistrationDTOFromSession().getRegistrationId());
+				if (tabPane != null) tabPane.setId(prid);
+			}
+		} catch (RegBaseCheckedException exception) {
+			generateAlertLanguageSpecific(RegistrationConstants.ERROR, RegistrationConstants.PRE_REG_TO_GET_PACKET_ERROR);
+		}
+	}
+
+	/**
+	 * Execute NRC search task to find pre-registration ID by NRC
+	 */
+//	private void executeNrcSearchTask(String nrc) {
+//		LOGGER.info("Starting NRC fetch for: [{}]", nrc);
+//
+//		genericScreen.setDisable(true);
+//		if (progressIndicator != null) progressIndicator.setVisible(true);
+//
+//		Service<ResponseDTO> searchService = new Service<ResponseDTO>() {
+//			@Override
+//			protected Task<ResponseDTO> createTask() {
+//				return new Task<ResponseDTO>() {
+//					@Override
+//					protected ResponseDTO call() throws Exception {
+//						// NRC is an application_id just like other application_ids
+//						// Fetch it directly like we do for regular application IDs
+//						LOGGER.info("Fetching application data for NRC (application_id): {}", nrc);
+//						return preRegistrationDataSyncService.getPreRegistration(nrc, true);
+//					}
+//				};
+//			}
+//		};
+//
+//		searchService.setOnSucceeded(event -> {
+//			handleNrcSearchResponse(searchService.getValue());
+//		});
+//
+//		searchService.setOnFailed(event -> {
+//			LOGGER.error("NRC search task failed", searchService.getException());
+//			handleNrcSearchResponse(null);
+//		});
+//
+//		searchService.start();
+//	}
+
+	private void executeNrcSearchTask(String nrc) {
+		// Replace nrc
+		String cleanNrc = nrc.replace("/", "");
+		LOGGER.info("Starting NRC fetch for clean PRID: [{}]", cleanNrc);  // This should show no (C)
+
+		genericScreen.setDisable(true);
+		if (progressIndicator != null) progressIndicator.setVisible(true);
+
+		Service<ResponseDTO> searchService = new Service<ResponseDTO>() {
+			@Override
+			protected Task<ResponseDTO> createTask() {
+				return new Task<ResponseDTO>() {
+					@Override
+					protected ResponseDTO call() throws Exception {
+						LOGGER.info("Calling pre-reg sync API with PRID: {}", cleanNrc);
+						return preRegistrationDataSyncService.getPreRegistration(cleanNrc, true);
+					}
+				};
+			}
+		};
+
+		searchService.setOnSucceeded(event -> {
+			handleNrcSearchResponse(searchService.getValue());
+		});
+
+		searchService.setOnFailed(event -> {
+			LOGGER.error("NRC search task failed", searchService.getException());
+			handleNrcSearchResponse(null);
+		});
+
+		searchService.start();
+	}
+
+	/**
+	 * Execute the NRC fetch task (NRC is application_id, fetch like other application_ids)
+	 */
+	private void executeNrcFetchTask(String prid) {
+		LOGGER.info("Original ID for Fetch: [{}]", prid);
+
+		genericScreen.setDisable(true);
+		if (progressIndicator != null) progressIndicator.setVisible(true);
+
+		Service<ResponseDTO> taskService = new Service<ResponseDTO>() {
+			@Override
+			protected Task<ResponseDTO> createTask() {
+				return new Task<ResponseDTO>() {
+					@Override
+					protected ResponseDTO call() throws Exception {
+						// REMOVE manual URLEncoder.encode here.
+						// Pass the RAW prid to the service.
+//						String encodedPrid = URLEncoder.encode(prid, StandardCharsets.UTF_8.toString());
+//						LOGGER.debug("Searching for PRID: {} (encoded: {})", prid, encodedPrid);
+//						return preRegistrationDataSyncService.getPreRegistration(encodedPrid, false);
+//						return preRegistrationDataSyncService.getPreRegistration(prid, false);
+						// Debug: Log the API call details
+						LOGGER.info("=== NRC SEARCH API CALL DEBUG ===");
+						LOGGER.info("PRID: {}", prid);
+						LOGGER.info("Force Download: false");
+
+						try {
+							// Service now handles URL encoding internally to avoid double encoding
+							LOGGER.info("Calling service with PRID (service handles encoding): {}", prid);
+							ResponseDTO result = preRegistrationDataSyncService.getPreRegistration(prid, true);
+							LOGGER.info("API Call Result: {}", result != null ? "Success" : "Null");
+							return result;
+						} catch (Exception e) {
+							LOGGER.error("API Call Exception: {}", e.getMessage());
+
+							// Try with forceDownload = false as fallback
+							try {
+								LOGGER.info("Retrying with forceDownload = false");
+								ResponseDTO result = preRegistrationDataSyncService.getPreRegistration(prid, false);
+								LOGGER.info("Fallback API Call Result: {}", result != null ? "Success" : "Null");
+								return result;
+							} catch (Exception e2) {
+								LOGGER.error("Fallback API Call also failed: {}", e2.getMessage(), e2);
+								throw e; // Throw original exception
+							}
+						}
+
+					}
+				};
+			}
+		};
+
+		taskService.setOnSucceeded(event -> {
+			genericScreen.setDisable(false);
+			if (progressIndicator != null) progressIndicator.setVisible(false);
+
+			ResponseDTO responseDTO = taskService.getValue();
+			handleFetchResponse(responseDTO, prid);
+		});
+
+		taskService.setOnFailed(event -> {
+			genericScreen.setDisable(false);
+			if (progressIndicator != null) progressIndicator.setVisible(false);
+			LOGGER.error("NRC Fetch Task failed for ID: {}", prid);
+			// Provide detailed error information
+			Throwable exception = event.getSource().getException();
+			String errorMessage = "Failed to fetch pre-registration '" + prid + "'";
+
+			if (exception != null) {
+				LOGGER.error("Exception details:", exception);
+				if (exception.getMessage() != null) {
+					if (exception.getMessage().contains("404")) {
+						errorMessage += "\n\n404 Not Found Error: The pre-registration does not exist on the server.";
+						errorMessage += "\n\nPossible causes:";
+						errorMessage += "\n1. Pre-registration exists in database but not published for sync";
+						errorMessage += "\n2. Pre-registration status prevents sync (needs booking/appointment)";
+						errorMessage += "\n3. Wrong server environment or API endpoint";
+						errorMessage += "\n4. URL encoding or special character issues";
+						errorMessage += "\n5. Authentication or authorization issues";
+					} else if (exception.getMessage().contains("500")) {
+						errorMessage += "\n\n500 Internal Server Error: Server-side processing issue.";
+					} else {
+						errorMessage += "\n\nError: " + exception.getMessage();
+					}
+				}
+			}
+
+			generateAlertLanguageSpecific(RegistrationConstants.ERROR, errorMessage);
+		});
+
+		taskService.start();
+	}
+
+	/**
+	 * Populate search dropdowns by copying data from actual demographic dropdowns
+	 */
+	private void populateSearchDropdownsFromDemographicFields() {
+		try {
+			// Wait a bit for demographic dropdowns to be fully populated
+			Thread.sleep(500);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+
+		Platform.runLater(() -> {
+			// Copy NRC Code dropdown data
+			if (nrcCodeComboBox != null) {
+				nrcCodeComboBox.getItems().clear();
+				FxControl nrcCodeControl = getFxControl("nrcCode");
+				if (nrcCodeControl instanceof DropDownFxControl) {
+					List<io.mosip.registration.dto.mastersync.GenericDto> options = ((DropDownFxControl) nrcCodeControl).getPossibleValues(getRegistrationDTOFromSession().getSelectedLanguagesByApplicant().get(0));
+					for (io.mosip.registration.dto.mastersync.GenericDto option : options) {
+						nrcCodeComboBox.getItems().add(option.getName());
+					}
+				}
+				// Fallback if no data
+				if (nrcCodeComboBox.getItems().isEmpty()) {
+					nrcCodeComboBox.getItems().addAll("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14");
+				}
+			}
+
+			// Copy City Code dropdown data (initially all cities)
+			if (cityCodeComboBox != null) {
+				cityCodeComboBox.getItems().clear();
+				FxControl cityCodeControl = getFxControl("cityCode");
+				if (cityCodeControl instanceof DropDownFxControl) {
+					// Get all possible cities initially (before any nrcCode selection)
+					List<io.mosip.registration.dto.mastersync.GenericDto> allCities = ((DropDownFxControl) cityCodeControl).getPossibleValues(getRegistrationDTOFromSession().getSelectedLanguagesByApplicant().get(0));
+					for (io.mosip.registration.dto.mastersync.GenericDto option : allCities) {
+						cityCodeComboBox.getItems().add(option.getName());
+					}
+				}
+				// Fallback if no data
+				if (cityCodeComboBox.getItems().isEmpty()) {
+					cityCodeComboBox.getItems().addAll("Mandalay", "Yangon", "Naypyidaw", "Mawlamyine", "Bago", "Pathein", "Monywa", "Sittwe", "Magway", "Sagaing", "Taunggyi", "Myingyan", "Tamana", "Pyay");
+				}
+			}
+
+			// Copy Citizen Type dropdown data
+			if (citizenTypeComboBox != null) {
+				citizenTypeComboBox.getItems().clear();
+				FxControl residenceStatusControl = getFxControl("residenceStatus");
+				if (residenceStatusControl instanceof DropDownFxControl) {
+					List<io.mosip.registration.dto.mastersync.GenericDto> options = ((DropDownFxControl) residenceStatusControl).getPossibleValues(getRegistrationDTOFromSession().getSelectedLanguagesByApplicant().get(0));
+					LOGGER.debug("Found {} residence status options from demographic dropdown", options.size());
+					for (io.mosip.registration.dto.mastersync.GenericDto option : options) {
+						citizenTypeComboBox.getItems().add(option.getName());
+						LOGGER.debug("Added residence status option: name='{}', code='{}'", option.getName(), option.getCode());
+					}
+				}
+				// Fallback if no data
+				if (citizenTypeComboBox.getItems().isEmpty()) {
+					LOGGER.debug("No residence status options found, using fallback values");
+					citizenTypeComboBox.getItems().addAll("N", "P", "T");
+				}
+			}
+
+			// Set up hierarchical filtering for NRC Code -> City Code
+			setupNrcHierarchyFiltering();
+		});
 	}
 
 }

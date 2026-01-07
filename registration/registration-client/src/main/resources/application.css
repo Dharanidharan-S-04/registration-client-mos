@@ -2739,3 +2739,30 @@ Working on new Css by taleev
   -fx-max-width: 280px;
 
 }
+.uniform-field-vbox {
+  -fx-pref-width: 280px;
+  -fx-max-width: 280px;
+  -fx-min-width: 280px;
+}
+.uniform-control {
+  -fx-pref-width: 280px;
+  -fx-max-width: 280px;
+  -fx-min-width: 280px;
+}
+.uniform-message-label {
+  -fx-max-width: 280px;
+}
+.nrcSearchPane {
+  -fx-background-color: #f8f9fa;
+  -fx-border-color: #dee2e6;
+  -fx-border-width: 1;
+  -fx-border-radius: 5;
+  -fx-padding: 10;
+  -fx-margin: 5 0 5 0;
+}
+.nrcFetchBtnStyle {
+    -fx-pref-height: 35.0px;
+    -fx-pref-width: 280.0px;
+    -fx-border-width: 0.0 0.0 1.0 0.0;
+    -fx-border-color: #005baa;
+}
