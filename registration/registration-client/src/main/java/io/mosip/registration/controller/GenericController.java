@@ -1850,9 +1850,6 @@ public class GenericController extends BaseController {
 		}
 	}
 
-	/**
-	 * Handle NRC concatenation for search fields using the same logic as handleNrcConcatenation
-	 */
 	private void handleSearchNrcConcatenation() {
 		try {
 			if (nrcNumber == null) return;
@@ -1870,67 +1867,66 @@ public class GenericController extends BaseController {
 				return;
 			}
 
-			StringBuilder sb = new StringBuilder();
+			// --- START: Master Data Lookup for City Code (e.g., LaPaTa7) ---
+			String cityCodeValue = cityCodeDisplay;
+			try {
+				FxControl nrcControl = getFxControl("nrcCode");
+				if (nrcControl instanceof DropDownFxControl) {
+					String parentLocCode = "";
+					List<GenericDto> nrcOptions = ((DropDownFxControl) nrcControl).getPossibleValues(selectedLang);
+					for (GenericDto opt : nrcOptions) {
+						if (opt.getName().equals(nrcCodeDisplay)) {
+							parentLocCode = opt.getCode();
+							break;
+						}
+					}
 
-			// 1. Append NRC Code (e.g., "5")
-			sb.append(nrcCodeDisplay.trim());
-
-			// 2. Append Slash ONLY if the NRC Code doesn't already have one
-			if (!nrcCodeDisplay.endsWith("/")) {
-				sb.append("/");
+					if (parentLocCode != null && !parentLocCode.isEmpty()) {
+						List<GenericDto> cityOptions = masterSyncService.getFieldValues(parentLocCode, selectedLang, true);
+						for (GenericDto city : cityOptions) {
+							if (city.getName().equals(cityCodeDisplay)) {
+								cityCodeValue = city.getCode(); // Retrieves "LaPaTa7"
+								break;
+							}
+						}
+					}
+				}
+			} catch (Exception e) {
+				LOGGER.error("Error fetching city code from master data", e);
 			}
 
-			// 3. Append City (e.g., "TaMaNa")
-			sb.append(cityCodeDisplay.trim());
-
-			// 4. Append Residence Status (e.g., "(A)")
 			String resCode = mapDisplayNameToResidenceCode(residenceStatusDisplay);
 			String resLabel = getResidenceStatusForLanguage(resCode, selectedLang);
-			sb.append(resLabel);
-
-			// 5. Append Digits (with script conversion)
 			String digits = toEnglishDigits(nrcDigits.trim());
 			if ("bur".equals(selectedLang)) {
 				digits = toBurmeseDigits(digits);
 			}
-			sb.append(digits);
 
-			String finalId = sb.toString();
-
-			// Log the cleaned ID for verification
-			LOGGER.info("Constructed Clean ID: [{}]", finalId);
-
-			StringBuilder displaySb = new StringBuilder();  // Full NRC with (C) for user
-			StringBuilder apiSb = new StringBuilder();      // Clean NRC without () for API
-
-			// Display version (keep parentheses for user visibility)
+			// 1. Display Version (User sees this)
+			StringBuilder displaySb = new StringBuilder();
 			displaySb.append(nrcCodeDisplay.trim());
 			if (!nrcCodeDisplay.endsWith("/")) displaySb.append("/");
 			displaySb.append(cityCodeDisplay.trim());
-			displaySb.append(resLabel);      // e.g., "(C)" or "(နိုင်)"
+			displaySb.append(resLabel);
 			displaySb.append(digits);
 
-			// API version (completely remove parentheses)
+			// 2. API Version (Hidden logic used for fetch)
+			StringBuilder apiSb = new StringBuilder();
 			apiSb.append(nrcCodeDisplay.trim());
 			if (!nrcCodeDisplay.endsWith("/")) apiSb.append("/");
-			apiSb.append(cityCodeDisplay.trim());
-			apiSb.append(resLabel);  // e.g., "(C)" — keep literal parentheses
+			apiSb.append(cityCodeValue.trim());
+			apiSb.append(resLabel);
 			apiSb.append(digits);
 
 			String displayNrc = displaySb.toString();
-			String apiPrid = apiSb.toString();  // Now: "11/YaThaTa(C)465464" with literal (C)
+			String apiPrid = apiSb.toString();
 
-//			nrcNumber.setText(displayNrc);
-			constructedPridTextField.setText(apiPrid);
-
-			LOGGER.info("Constructed Display NRC: [{}]", displayNrc);
-			LOGGER.info("Constructed API PRID (no parens): [{}]", apiPrid);
-
-			// Show full NRC to user
+			// Set values to UI components (Both show the display name to the user)
 			nrcNumber.setText(displayNrc);
+			constructedPridTextField.setText(displayNrc);
 
-			// Use clean version for the hidden PRID field and API call
-			constructedPridTextField.setText(apiPrid);
+			LOGGER.info("Constructed Display NRC for UI: [{}]", displayNrc);
+			LOGGER.info("Internal API PRID ready for fetch: [{}]", apiPrid);
 
 		} catch (Exception e) {
 			LOGGER.error("Error in search NRC concatenation", e);
@@ -1991,27 +1987,6 @@ public class GenericController extends BaseController {
 		return true;
 	}
 
-	/**
-	 * Fetch pre-registration data using NRC components
-	 */
-//	@FXML
-//	private void fetchNrcData() {
-//		if (!validateNrcComponents()) {
-//			return;
-//		}
-//
-//		// Use the concatenated NRC number
-//		String fullNrc = nrcNumber != null ? nrcNumber.getText() : "";
-//		if (fullNrc == null || fullNrc.trim().isEmpty()) {
-//			generateAlertLanguageSpecific(RegistrationConstants.ERROR, "Unable to construct NRC number for search");
-//			return;
-//		}
-//
-//		// First search for the pre-registration ID using the NRC
-	////		executeNrcSearchTask(fullNrc);
-//		String pridForApi = constructedPridTextField.getText().trim();  // Now "11/YaThaTaC465464"
-//		executeNrcSearchTask(pridForApi);
-//	}
 
 	@FXML
 	private void fetchNrcData() {
@@ -2019,19 +1994,74 @@ public class GenericController extends BaseController {
 			return;
 		}
 
-		// Force reconstruction to ensure clean version is ready
-		handleSearchNrcConcatenation();
+		try {
+			String selectedLang = getRegistrationDTOFromSession().getSelectedLanguagesByApplicant().get(0);
+			String nrcCodeDisplay = nrcCodeComboBox.getValue();
+			String cityCodeDisplay = cityCodeComboBox.getValue();
+			String residenceStatusDisplay = citizenTypeComboBox.getValue();
+			String nrcDigits = nrcNumberTextField.getText();
 
-		String apiPrid = constructedPridTextField.getText().trim();
+//			0. Recalculate the nrcCode (eg ., 14/  -> 14)
+			String nrcCodeValue=  nrcCodeDisplay;
 
-		if (apiPrid.isEmpty()) {
-			generateAlertLanguageSpecific(RegistrationConstants.ERROR, "Unable to construct clean NRC for search");
-			return;
+			// 1. Recalculate the City Code (e.g., LaPaTa7)
+			String cityCodeValue = cityCodeDisplay;
+			FxControl nrcControl = getFxControl("nrcCode");
+			if (nrcControl instanceof DropDownFxControl) {
+				String parentLocCode = "";
+				List<GenericDto> nrcOptions = ((DropDownFxControl) nrcControl).getPossibleValues(selectedLang);
+				for (GenericDto opt : nrcOptions) {
+					if (opt.getName().equals(nrcCodeDisplay)) {
+						parentLocCode = opt.getCode();
+						nrcCodeValue = parentLocCode;
+						break;
+					}
+				}
+				if (parentLocCode != null && !parentLocCode.isEmpty()) {
+					List<GenericDto> cityOptions = masterSyncService.getFieldValues(parentLocCode, selectedLang, true);
+					for (GenericDto city : cityOptions) {
+						if (city.getName().equals(cityCodeDisplay)) {
+							cityCodeValue = city.getCode();
+							break;
+						}
+					}
+				}
+			}
+
+			// 2. Recalculate Residence Label and Digits
+			String resCode = mapDisplayNameToResidenceCode(residenceStatusDisplay);
+			String resLabel = getResidenceStatusForLanguage(resCode, selectedLang);
+			String digits = toEnglishDigits(nrcDigits.trim());
+			// For API call, we usually send English digits.
+			// If your API requires Burmese digits when lang is bur, uncomment below:
+			// if ("bur".equals(selectedLang)) { digits = toBurmeseDigits(digits); }
+
+			// 3. Construct the API PRID using the Code
+			StringBuilder apiSb = new StringBuilder();
+			apiSb.append(nrcCodeValue.trim());
+			// if (!nrcCodeDisplay.endsWith("/")) apiSb.append("/");
+			apiSb.append(cityCodeValue.trim()); // Uses LaPaTa7
+			if (resLabel.equals("(နိုင်)")) resLabel="(C)";
+			else if (resLabel.equals("(ပြု)")) resLabel="(N)";
+			else if (resLabel.equals("(ဧည့်)")) resLabel="(A)";
+			apiSb.append(resLabel);
+			apiSb.append(digits);
+
+			String apiPrid = apiSb.toString();
+
+			if (apiPrid.isEmpty()) {
+				generateAlertLanguageSpecific(RegistrationConstants.ERROR, "Unable to construct NRC for search");
+				return;
+			}
+
+			LOGGER.info("Starting NRC fetch using calculated apiPrid (with Master Code): [{}]", apiPrid);
+
+			executeNrcSearchTask(apiPrid);
+
+		} catch (Exception e) {
+			LOGGER.error("Error constructing fetch ID", e);
+			generateAlertLanguageSpecific(RegistrationConstants.ERROR, "System error constructing Search ID");
 		}
-
-		LOGGER.info("Starting NRC fetch using clean PRID (no parentheses): [{}]", apiPrid);
-
-		executeNrcSearchTask(apiPrid);
 	}
 	/**
 	 * Handle the response from NRC search
@@ -2085,45 +2115,10 @@ public class GenericController extends BaseController {
 		}
 	}
 
-	/**
-	 * Execute NRC search task to find pre-registration ID by NRC
-	 */
-//	private void executeNrcSearchTask(String nrc) {
-//		LOGGER.info("Starting NRC fetch for: [{}]", nrc);
-//
-//		genericScreen.setDisable(true);
-//		if (progressIndicator != null) progressIndicator.setVisible(true);
-//
-//		Service<ResponseDTO> searchService = new Service<ResponseDTO>() {
-//			@Override
-//			protected Task<ResponseDTO> createTask() {
-//				return new Task<ResponseDTO>() {
-//					@Override
-//					protected ResponseDTO call() throws Exception {
-//						// NRC is an application_id just like other application_ids
-//						// Fetch it directly like we do for regular application IDs
-//						LOGGER.info("Fetching application data for NRC (application_id): {}", nrc);
-//						return preRegistrationDataSyncService.getPreRegistration(nrc, true);
-//					}
-//				};
-//			}
-//		};
-//
-//		searchService.setOnSucceeded(event -> {
-//			handleNrcSearchResponse(searchService.getValue());
-//		});
-//
-//		searchService.setOnFailed(event -> {
-//			LOGGER.error("NRC search task failed", searchService.getException());
-//			handleNrcSearchResponse(null);
-//		});
-//
-//		searchService.start();
-//	}
-
 	private void executeNrcSearchTask(String nrc) {
 		// Replace nrc
-		String cleanNrc = nrc.replace("/", "");
+		//String cleanNrc = nrc.replace("/", "");
+		String cleanNrc = nrc;
 		LOGGER.info("Starting NRC fetch for clean PRID: [{}]", cleanNrc);  // This should show no (C)
 
 		genericScreen.setDisable(true);
@@ -2152,99 +2147,6 @@ public class GenericController extends BaseController {
 		});
 
 		searchService.start();
-	}
-
-	/**
-	 * Execute the NRC fetch task (NRC is application_id, fetch like other application_ids)
-	 */
-	private void executeNrcFetchTask(String prid) {
-		LOGGER.info("Original ID for Fetch: [{}]", prid);
-
-		genericScreen.setDisable(true);
-		if (progressIndicator != null) progressIndicator.setVisible(true);
-
-		Service<ResponseDTO> taskService = new Service<ResponseDTO>() {
-			@Override
-			protected Task<ResponseDTO> createTask() {
-				return new Task<ResponseDTO>() {
-					@Override
-					protected ResponseDTO call() throws Exception {
-						// REMOVE manual URLEncoder.encode here.
-						// Pass the RAW prid to the service.
-//						String encodedPrid = URLEncoder.encode(prid, StandardCharsets.UTF_8.toString());
-//						LOGGER.debug("Searching for PRID: {} (encoded: {})", prid, encodedPrid);
-//						return preRegistrationDataSyncService.getPreRegistration(encodedPrid, false);
-//						return preRegistrationDataSyncService.getPreRegistration(prid, false);
-						// Debug: Log the API call details
-						LOGGER.info("=== NRC SEARCH API CALL DEBUG ===");
-						LOGGER.info("PRID: {}", prid);
-						LOGGER.info("Force Download: false");
-
-						try {
-							// Service now handles URL encoding internally to avoid double encoding
-							LOGGER.info("Calling service with PRID (service handles encoding): {}", prid);
-							ResponseDTO result = preRegistrationDataSyncService.getPreRegistration(prid, true);
-							LOGGER.info("API Call Result: {}", result != null ? "Success" : "Null");
-							return result;
-						} catch (Exception e) {
-							LOGGER.error("API Call Exception: {}", e.getMessage());
-
-							// Try with forceDownload = false as fallback
-							try {
-								LOGGER.info("Retrying with forceDownload = false");
-								ResponseDTO result = preRegistrationDataSyncService.getPreRegistration(prid, false);
-								LOGGER.info("Fallback API Call Result: {}", result != null ? "Success" : "Null");
-								return result;
-							} catch (Exception e2) {
-								LOGGER.error("Fallback API Call also failed: {}", e2.getMessage(), e2);
-								throw e; // Throw original exception
-							}
-						}
-
-					}
-				};
-			}
-		};
-
-		taskService.setOnSucceeded(event -> {
-			genericScreen.setDisable(false);
-			if (progressIndicator != null) progressIndicator.setVisible(false);
-
-			ResponseDTO responseDTO = taskService.getValue();
-			handleFetchResponse(responseDTO, prid);
-		});
-
-		taskService.setOnFailed(event -> {
-			genericScreen.setDisable(false);
-			if (progressIndicator != null) progressIndicator.setVisible(false);
-			LOGGER.error("NRC Fetch Task failed for ID: {}", prid);
-			// Provide detailed error information
-			Throwable exception = event.getSource().getException();
-			String errorMessage = "Failed to fetch pre-registration '" + prid + "'";
-
-			if (exception != null) {
-				LOGGER.error("Exception details:", exception);
-				if (exception.getMessage() != null) {
-					if (exception.getMessage().contains("404")) {
-						errorMessage += "\n\n404 Not Found Error: The pre-registration does not exist on the server.";
-						errorMessage += "\n\nPossible causes:";
-						errorMessage += "\n1. Pre-registration exists in database but not published for sync";
-						errorMessage += "\n2. Pre-registration status prevents sync (needs booking/appointment)";
-						errorMessage += "\n3. Wrong server environment or API endpoint";
-						errorMessage += "\n4. URL encoding or special character issues";
-						errorMessage += "\n5. Authentication or authorization issues";
-					} else if (exception.getMessage().contains("500")) {
-						errorMessage += "\n\n500 Internal Server Error: Server-side processing issue.";
-					} else {
-						errorMessage += "\n\nError: " + exception.getMessage();
-					}
-				}
-			}
-
-			generateAlertLanguageSpecific(RegistrationConstants.ERROR, errorMessage);
-		});
-
-		taskService.start();
 	}
 
 	/**
@@ -2310,10 +2212,8 @@ public class GenericController extends BaseController {
 					citizenTypeComboBox.getItems().addAll("N", "P", "T");
 				}
 			}
-
 			// Set up hierarchical filtering for NRC Code -> City Code
 			setupNrcHierarchyFiltering();
 		});
 	}
-
 }
