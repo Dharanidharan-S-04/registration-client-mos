@@ -123,6 +123,10 @@ public class ClientApplication extends Application {
 		try {
 			if(ClientPreLoader.errorsFound)
 				return;
+			Font.loadFont(
+					getClass().getResourceAsStream("/fonts/NotoSansMyanmar-Regular.ttf"),
+					14
+			);
 
 			LOGGER.info("Login screen Initialization {}", new SimpleDateFormat(RegistrationConstants.HH_MM_SS).format(System.currentTimeMillis()));
 
